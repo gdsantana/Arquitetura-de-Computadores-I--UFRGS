@@ -1,0 +1,440 @@
+	
+
+_APP:		equ	h0100		; inicio da APP
+_SISTEMA:	equ	h0080		; area das syscall
+
+
+;----------------------------------------------------------------------------------------------------
+;	Funções usadas para ler/escrever no relógio
+;		0			-> 		BOOL(r0)	kbhit(void)
+;		1			-> 		CHAR(r0)	getchar(void)
+;		2			-> 		UNSIGNED SHORT(r0)	gettime(void)
+;		3			-> 		VOID	putchar(CHAR(r0); INT(r1))
+;		4			-> 		VOID	putmsg(CHAR*(r0); INT(r1))
+;----------------------------------------------------------------------------------------------------
+;	r5 -> indica a função
+
+kbhit:	equ	0
+getchar:equ	1
+gettime:equ	2
+putchar:equ	3
+putmsg:	equ	4
+
+
+
+mascara: equ 	15 
+under: equ	95
+enter: equ	13
+backspace: equ  08
+space: equ	32	
+tela_max: equ	20
+
+	org	_APP
+;----------------------------------------------------------------------------------------------------
+
+;		->PROGRAMA PRINCIPAL<-
+		
+
+	mov #65500,tela_seq
+	mov #65511,tela_res
+	
+	clr r1
+	mov #putmsg,r5			;|
+	mov #autor,r0			;|
+	jsr r7,_SISTEMA			;|
+					;|
+	mov #getchar,r5			;|
+	jsr r7,_SISTEMA			;|
+	
+	mov #putmsg, r5	
+	mov #limpa,r0
+	clr r1
+	jsr r7,_SISTEMA	
+	
+	clr r1
+	mov #putmsg,r5			;|
+	mov #instrucao_1,r0		;|
+	jsr r7,_SISTEMA			;|----->Instrodução mostrando no visor o autor e como se joga
+	mov #getchar,r5			;|
+	jsr r7,_SISTEMA			;|
+
+	mov #putmsg, r5	
+	mov #limpa,r0
+	clr r1
+	jsr r7,_SISTEMA
+	
+	clr r1
+	mov #putmsg,r5			;|
+	mov #instrucao_2,r0		;|
+	jsr r7,_SISTEMA			;|
+	mov #getchar,r5			;|
+	jsr r7,_SISTEMA			;|
+	
+	mov #putmsg, r5	
+	mov #limpa,r0
+	clr r1
+	jsr r7,_SISTEMA
+	
+	clr r1
+	mov #putmsg,r5			;|
+	mov #instrucao_3,r0		;|
+	jsr r7,_SISTEMA			;|
+
+inicio:
+	mov #getchar,r5			;|
+	jsr r7, _SISTEMA		;|
+	cmp r0,#13			;|-->espera o jogador digitar enter para inicializar
+	beq jogo			;|
+	br inicio			;|
+
+jogo:
+	mov #putmsg, r5	
+	mov #limpa,r0
+	clr r1
+	jsr r7,_SISTEMA
+	
+	mov #gettime, r5		
+	jsr r7,_SISTEMA			
+	and #mascara, r0
+	asl r0
+	asl r0
+	asl r0				 
+	add #sequencias,r0
+	mov r0, r3
+	dec r3
+	clr r1	
+	mov #8,r4
+loop_inicial:
+	mov (r3),r0
+	mov #putchar,r5
+	jsr r7,_SISTEMA	
+	
+	inc r3
+	inc r1
+	sob r4,loop_inicial
+time:
+	mov #putchar,r5
+	mov #space,r0
+	mov #8,r1
+	jsr r7,_SISTEMA
+	
+	mov #putchar,r5
+	mov #':',r0
+	inc r1
+	jsr r7,_SISTEMA
+	
+	mov #putchar,r5
+	mov #space,r0
+	inc r1
+	jsr r7,_SISTEMA	
+	
+	mov #putchar,r5
+	mov #under,r0
+	inc r1
+	jsr r7,_SISTEMA	
+
+	mov #gettime,r5			
+	jsr r7,_SISTEMA			; salva o tempo inicial q começou
+	mov r0,tempo_inicial
+	mov contador_espacos,r1
+loop:
+	mov #getchar,r5
+	jsr r7,_SISTEMA
+	cmp r0,#backspace		;testa pra ver se o caracter é o backspace
+	beq apaga
+	
+	cmp r0,#enter			;-> testa o limite max de 8 caracteres
+	beq correcao
+	cmp r1,#19			;->limita q o jogador digite ate 8 caracteres
+	beq loop
+
+
+	cmp r0, #48
+	blt loop			;|	
+	cmp r0, #58			;|
+	blt continua_loop		;|Tratamento de caracteres:
+	blt loop			;|invalidos. Caso o jogador 
+	cmp r0, #91			;|aperte um, o jogo volta a esperar
+	blt continua_loop		;|outro caracter
+	cmp r0, #97			;|
+	blt loop			;|
+	cmp #122, r0			;|
+	blt loop 			;|
+
+
+
+
+continua_loop:
+	mov #putchar, r5		;|
+	jsr r7,_SISTEMA			;|
+	inc r1				;|->coloca o char e o underline em seguida
+					;|
+	mov #under, r0			;|
+	mov #putchar, r5		;|
+	jsr r7,_SISTEMA			
+	br loop
+
+apaga:					;apaga o caracter digitado
+	cmp r1,#11			;testa pra nao apagar o q n pode
+	beq loop
+	mov #putchar,r5
+	mov #space,r0
+	jsr r7,_SISTEMA
+	dec r1		
+	mov #under,r0			;|
+	mov #putchar,r5			;|->printa o underline na posiçao seguinte
+	jsr r7,_SISTEMA			;|
+	br loop
+	
+correcao:
+	
+	mov #gettime,r5
+	jsr r7,_SISTEMA
+	mov r0,tempo_final
+	mov tela_seq,r0
+	mov tela_res,r1
+	mov #4,r2
+	
+comparacao_tela:
+	
+	cmp (r0),(r1)
+	bne perdeu
+		
+proximo:
+	inc r0
+	inc r0
+	inc r1
+	inc r1
+	sob r2,comparacao_tela
+acertou:
+	mov #certo,r0
+	mov #19,r1
+	mov #putmsg, r5
+	jsr r7,_SISTEMA
+	br segue
+perdeu:
+	mov #errou,r0
+	mov #19,r1
+	mov #putmsg, r5
+	jsr r7,_SISTEMA
+
+segue:
+
+	sub tempo_inicial,tempo_final
+	clr r0
+	mov tempo_final,r1
+	mov #10,r2
+	jsr r7,_S_DIVIDIR
+	
+	add #48,r1
+	mov r0,tempo_final
+
+	
+	mov #putchar,r5
+	mov r1,r0
+	mov #31,r1
+	jsr r7,_SISTEMA
+
+	clr r0
+	mov tempo_final,r1
+	mov #10,r2
+	jsr r7,_S_DIVIDIR
+	
+	add #48,r1
+	mov r0,tempo_final
+	cmp r1,#48
+	bne gambiarra
+	jmp p_teste
+gambiarra:	
+	mov #putchar,r5
+	mov r1,r0
+	mov #30,r1
+	jsr r7,_SISTEMA
+
+	clr r0
+	mov tempo_final,r1
+	mov #10,r2
+	jsr r7,_S_DIVIDIR
+	
+	add #48,r1
+	mov r0,tempo_final
+	cmp r1,#48
+	beq p_teste
+	
+	mov #putchar,r5
+	mov r1,r0
+	mov #29,r1
+	jsr r7,_SISTEMA
+
+proxima_partida:
+	mov #putmsg,r5
+	mov #segundo,r0
+	mov #33,r1
+	jsr r7,_SISTEMA 
+
+	mov #getchar, r5
+	jsr r7,_SISTEMA
+loop_fim:	
+	cmp #enter,r0
+	bne loop_fim
+	
+	mov #putmsg,r5
+	mov #instrucao_4,r0
+	clr r1
+	jsr r7,_SISTEMA
+loop_fim2:
+	mov #getchar,r5
+	jsr r7,_SISTEMA
+
+	cmp #74,r0
+	beq novo_jogo
+	cmp #106,r0
+	beq novo_jogo
+	cmp #84,r0
+	beq fim
+	cmp #116,r0
+	beq fim
+	br loop_fim2
+
+novo_jogo:
+	jmp jogo
+fim:
+	mov #putmsg,r5
+	mov #mensagem_final,r0
+	clr r1
+	jsr r7,_SISTEMA
+	
+	
+	hlt
+	
+	
+	
+p_teste:
+	clr r0
+	mov tempo_final,r1
+	mov #10,r2
+	jsr r7,_S_DIVIDIR
+	
+	add #48,r1
+	mov r0,tempo_final
+	cmp r1,#48
+	beq proxima_partida
+
+	mov #putchar,r5
+	mov r1,r0
+	mov #29,r1
+	jsr r7,_SISTEMA
+	mov #48,r0
+	mov #30,r1
+	jsr r7,_SISTEMA
+	
+	
+	
+	
+
+
+;> Dividir int. positivo de 32 bits por um de 16 bits
+;>
+;> Chamada da subrotina:
+;>
+;> MOV #msbitsdividendo,R0      ; 16 bits mais significativos do dividendo
+;> MOV #lsbitsdividendo,R1      ; 16 bits menos significativos do dividendo
+;> MOV #divisor,R2              ; divisor (16 bits)
+;> JSR R7,_S_DIVIDIR
+;>
+;> No retorno da subrotina:
+;> - R0 contém o quociente (16 bits)
+;> - R1 contém o resto (16 bits)
+;> - R2 ainda contém o divisor, inalterado (16 bits)
+;> - Códigos de condição:
+;>   V = 1 indica que ocorreu estouro na divisão (quociente não cabe em 16 bits)
+;>   Z = 1 indica que ocorreu uma tentativa de divisão por zero
+;>   Nestes dois casos, R0, R1 e R2 não são alterados pela subrotina
+;>
+_S_DIVIDIR:
+          TST R2                ; testa divisor
+          BNE __NAO_ZERO        ; se <> zero, continua
+          CCC V                 ; indica divisao por zero
+          RTS R7                ; retorna ao ponto de chamada
+
+__NAO_ZERO:
+          CMP R0,R2             ; testa se dividendo(msb)
+                                ; e' >= que o divisor
+          BCC __INDICA_ESTOURO  ; se for, indicar estouro
+                                ; note: BCC equivale a um
+                                ; BGE para int. positivos
+;>
+          MOV R3,-(R6)          ; salva R3 na pilha
+          MOV R4,-(R6)          ; salva R4 na pilha
+          MOV R5,-(R6)          ; salva R5 na pilha
+          MOV R0,R3             ; copia dividendo para
+          MOV R1,R4             ; R3 e R4 (=q no final)
+          MOV #16,R5            ; inicializa contador
+          ASL R4                ; desloca dividendo p/a
+          ROL R3                ; esquerda e abre espaco
+          BCS __SUBTRAI_DIVISOR ; p/um bit do quociente
+          CMP R3,R2             ; se n+1 msbits do divid.
+          BCS __BIT_ZERO        ; maiores que divisor (= BLT p/inteiros positivos)
+__SUBTRAI_DIVISOR:
+          SUB R2,R3             ; subtrai divisor e
+          INC R4                ; ajusta bit do quociente
+__BIT_ZERO:
+          SOB R5,16             ; decr. R5; se <>0, repete
+          MOV R3,R1             ; copia resto para R1
+          MOV R4,R0             ; copia quociente p/R0
+          MOV (R6)+,R5          ; restaura
+          MOV (R6)+,R4          ; registradores
+          MOV (R6)+,R3          ; de trabalho
+          CCC V Z               ; limpa cod. de condicao
+          RTS R7                ; retorna ao ponto de chamada
+;>
+__INDICA_ESTOURO:
+          SCC V                 ; indica overflow e nao
+          CCC Z                 ; divisao por zero
+          RTS R7                ; retorna ao ponto de chamada
+
+limpa: dab '                                    ',0
+autor:dab 'Guilherme Santana - 00301388', 0
+instrucao_1: dab 'Jogo eh escreva as palavras certas...',0
+instrucao_2: dab '...no menor tempo possivel',0
+instrucao_3: dab 'ESTA PRONTO PARA COMECAR??',0
+instrucao_4: dab 'Novo jogo (J/j) ou terminar (T/t)?',0
+mensagem_final: dab '-------->Obrigado por jogar<--------',0
+tempo_inicial: dw 0
+tempo_final: dw 0
+contador_espacos: dw 11
+tela_seq: dw 0
+tela_res: dw 0
+contador: dw 11
+	
+segundo: dab 'seg',0
+certo: dab ' - certo,',0
+errou: dab ' - errou,',0
+sequencias:
+	dab 'abcdefgh'	;indice 0
+	dab '01234567'	;indice 1
+	dab 'SaNtAnAa'	;indice 2
+	dab 'neaAnder'	;indice 3
+	dab 'UsGuriss'	;indice 4
+	dab 'ufrgsinf'	;indice 5
+	dab '30_abril'	;indice 6
+	dab 'alfabeto'	;indice 7
+	dab 'numerais'	;indice 8
+	dab 'a0B1C5d7'	;indice 9
+	dab 'auhwjhdu'	;indice 10
+	dab 'hfuauahe'	;indice 11
+	dab 'AscIICes'	;indice 12
+	dab 'QWERTYyY'	;indice 13
+	dab 'ASDFGHJK'	;indice 14
+	dab '12345678'	;indice 15
+	
+
+
+	
+	
+	  
+
+
+
+
+

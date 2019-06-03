@@ -1,0 +1,106 @@
+zera: 			;zera as variaveis finais 
+	ldr a #0
+	str a resul_mais
+	str a resul_menos
+	ldr x 197
+
+inicio:
+	ldr a 0,X 	;carregando byte mais sig no reg A
+	jz teste_1	;primeiro testa pra ver se ja acabou o vetor
+	ldr b 1,X 	;carregando byte menos sig no reg B
+	
+rotacao:
+	jsr SHIFT_A
+	jsr SHIFT_B
+	
+	add b resul_mais	;soma o valor dos bytes mais e menos sig 
+	str b resul_mais	;com o resultado final
+	add a resul_menos	
+	str a resul_menos
+	jc carry_final
+proximo:
+	add x #2	;add 2 no X que é o ponteiro do vetor
+	ldr a 0,X
+	jz teste_1	;segundo teste-> ultimo 2 byte = zero
+	ldr b 1,X
+	jmp rotacao
+teste_1:
+	ldr b 1,X
+	jz fim
+	jmp rotacao
+fim:
+	ldr a resul_mais
+	ldr b resul_menos
+	jsr SHIFT_A
+	jsr SHIFT_B
+	str a resul_menos
+	str b resul_mais
+	hlt
+
+carry_final:
+	ldr a resul_mais
+	add a #1
+	str a resul_mais
+	jmp proximo
+
+SHIFT_A:		;rotaciona o A
+	nop
+	shr a
+	jc carry_1
+um:
+	shr a
+	jc carry_2
+dois:
+	shr a
+	jc carry_3
+tres:
+	shr a
+	jc carry_4
+quatro:
+	jmp SHIFT_A,I
+
+carry_1:
+	add a #128
+	jmp um
+carry_2:
+	add a #128
+	jmp dois
+carry_3:
+	add a #128
+	jmp tres
+carry_4:
+	add a #128
+	jmp quatro
+
+SHIFT_B:		;rotationa o B
+	nop
+	shr b
+	jc carry_5
+cinco:
+	shr b
+	jc carry_6
+seis:
+	shr b
+	jc carry_7
+sete:
+	shr b
+	jc carry_8
+oito:
+	jmp SHIFT_B,I
+
+carry_5:
+	add b #128
+	jmp cinco
+carry_6:
+	add b #128
+	jmp seis
+carry_7:
+	add b #128
+	jmp sete
+carry_8: 
+	add b #128
+	jmp oito
+
+org 198
+resul_mais: db 0
+resul_menos: db 0

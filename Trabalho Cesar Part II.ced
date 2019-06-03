@@ -1,0 +1,407 @@
+;************************************************************************************
+;
+; Arquivo base para desenvolvimento do KERNEL - parte 2 do trabalho com o Cesar
+;
+; Versao: 2019.1.0
+;
+; Areas de memoria:
+;
+;     0000 - 007F (0 - 127)	     _BOOT
+;				     Area de Boot
+;				     Aqui deve ser colocado um desvio para o codigo de
+;                                    inicializacao do sistema de interrupcoes: JMP _RESET
+;
+;     0080 - 00FF (128-255)	     _SISTEMA
+;				     Area de interface da APP com o KERNEL
+;				     Aqui é verificada qual a funcao chamada (valor no R5)
+;				     e feito um desvio para o corpo da funcao correspondente
+;                                    Nota: o corpo das funções do SISTEMA (kbhit, getchar, 
+;                                          putchar, putmsg, gettime, setclock e getclock)
+;                                          deve ser codificado na area do KERNEL.
+;
+;     0100 - 7FFF (256 a 32767)	     _APP
+;				     Programa de Aplicacao (APP)
+;				     Espaço reservado para carga parcial dos aplicativos 
+;                                    para testar o KERNEL e corrigir o trabalho. Não usar.
+;
+;     8000 - FF7F (32768 a 65407)    _KERNEL
+;				     Area para colocar a inicializacao do sistema de 
+;                                    interrupcoes (_RESET), a rotina de atendimento de
+;                                    interrupcoes - ISR (que inclui os os TRATADORES DE 
+;				     INTERRUPCOES do TIMER e do TECLADO), as rotinas que  
+;                                    implementam asfuncoes do SISTEMA e a pilha (base da 
+;                                    pilha = 65408). Aqui tambem devem ser colocadas as 
+;                                    rotinas e variaveis locais usadas pelo KERNEL.
+;
+;     FF80 - FFBF (65408 a 65471)    _IOAREA16
+;				     Area de perifericos, acessada como palavras (16 bits)
+;
+;     FFC0 - FFFF (65472 a 65535)    _IOAREA08
+;				     Area de perifericos, acessada como bytes (8 bits)
+;					
+;************************************************************************************
+;
+; Definicao de constantes correspondentes aos enderecos acima descritos
+;
+_BOOT:		equ	0 	     ; (h0000) boot (desvio para _RESET)
+_SISTEMA:	equ	128	     ; (h0080) area de inicializacao das funcoes do SISTEMA
+_APP:		equ	256	     ; (h0100) area da aplicacao - sera carregada com programas de teste
+_KERNEL:	equ	32768        ; (h8000) area do Kernel
+_IOAREA16:	equ	65408	     ; (hFF80) area de perifericos, acessada como palavras (16 bits)
+_IOAREA08:	equ	65472 	     ; (hFFC0) area de perifericos, acessada como bytes (8 bits)
+_STACK:		equ	_IOAREA16    ; base da pilha na area do kernel
+;
+;==============================================================================
+;	Boot Startup
+;	NAO ALTERAR ESSA AREA
+;==============================================================================
+	org		_BOOT
+	jmp		_RESET       ; vetor de reset
+	dw		2019         ; versao = 2019.1.0
+	db		1
+	db		0
+;	
+;==============================================================================
+;	Nesta area ficara o codigo que identifica qual a funcao do SISTEMA
+;	que foi chamada (atraves de um JSR R7,_SISTEMA), analisando o conteudo
+;	do registrador R5 e desviando para o codigo da funcao correspondente, 
+;	que deverá ser codificado na area do KERNEL (adiante)
+;==============================================================================
+	org	_SISTEMA
+
+	cmp r5,#KBHIT
+	bne continua1
+	jmp F_KBHIT
+continua1:
+	cmp r5,#GETCHAR
+	bne continua2
+	jmp F_GETCHAR
+continua2:
+	cmp r5,#GETTIME
+	bne continua3
+	jmp F_GETTIME
+continua3:
+	cmp r5,#PUTCHAR
+	bne continua4
+	jmp F_PUTCHAR
+continua4:
+	cmp r5,#PUTMSG
+	bne continua5
+	jmp F_PUTMSG
+continua5:
+	cmp r5,#GETCLOCK
+	bne continua6
+	jmp F_GETCLOCK
+continua6:
+	cmp r5,#SETCLOCK
+	bne continua7
+	jmp F_SETCLOCK
+continua7:
+
+	
+	
+	
+
+;	
+;==============================================================================
+;	O programa de aplicacao sera carregado aqui (enderecos 256 a 32767)
+;	NADA deve ser codificado neste espaco, que estara reservado para fazer
+;	a carga parcial dos programas usados para testar o KERNEL
+;==============================================================================
+	org	_APP
+;	
+;==============================================================================
+;	Area para o kernel
+;    	Inicialização do sistema de interrupcoes (_RESET)
+;	Implementacao dos tratadores de interrupcao (_ISR)
+;	Implementacao das funcoes do SISTEMA
+;	A pilha ocupara os enderecos mais altos desta area (abaixo de 65408)
+;==============================================================================
+	org	_KERNEL
+;==============================================================================
+;	Codigo de RESET (BOOT) do processador/interrupcao
+;==============================================================================
+_RESET:
+; 1) Desabilitar o sistema de interrupcoes
+	clr INTE
+; 2) Inicializar o stack pointer (SP = R6)
+	mov #_STACK,r6
+; 3) Inicializar as variaveis internas usadas pelo sistema de interrupcoes (IVET, INTE, etc.)
+	mov #_ISR, IVET
+; 4) Inicializar as variaveis internas do kernel
+	clr SEGUNDOS
+	clr SEGUNDO
+	clr MINUTO
+	clr HORA
+	clr contador_ticks
+	mov #-1,TECLA
+	clr r0
+	clr r1
+	clr r2
+	clr r3
+	clr r4
+	clr r5
+; 5) Inicializar o teclado zerando o byte de estado (TECST, endereco 65498)
+	clr TECST
+; 6) Inicializar o timer para interromper a cada X milissegundos (colocando o valor de X na variavel TIMDT)
+	mov #250,TIMDT
+; 7) Limpar o visor
+	jsr r7,_S_LIMPA_VISOR_RAPIDA
+; 8) Habilitar interrupcoes
+	mov #131, INTE
+; 9) Retornar para o programa de aplicacao com um desvio para o endereco 256 (H0100) da memoria
+	jmp _APP
+;==============================================================================
+;	Implementacao das funcoes do SISTEMA
+;     	KBHIT, GETCHAR, PUTCHAR, PUTMSG, GETTIME, GETCLOCK e SETCLOCK
+;	Nota: cada funcao deve terminar com um RTS R7
+;==============================================================================
+; Constantes com os códigos das funções do SISTEMA
+KBHIT:    equ 0
+GETCHAR:  equ 1
+GETTIME:  equ 2
+PUTCHAR:  equ 3
+PUTMSG:   equ 4
+GETCLOCK: equ 5
+SETCLOCK: equ 6
+;
+F_KBHIT:
+	cmp TECLA,#-1
+	beq n_clico
+	mov #1,r0
+rts_kbhit:
+	rts r7
+n_clico:
+	clr r0
+	br rts_kbhit
+
+
+F_GETCHAR:
+	cmp TECLA,#-1
+	beq F_GETCHAR
+	mov TECLA, r0
+	mov #-1,TECLA
+	rts r7
+
+F_GETTIME:
+	mov SEGUNDOS,r0
+	rts r7
+
+
+F_PUTCHAR:
+	cmp r1,#35
+	bgt putchar_fim
+	add #65500,r1
+	mov r0,(r1)
+putchar_fim:
+	rts r7
+
+
+F_PUTMSG:
+          MOV R0,-(R6)          ; salva R0 - vai ser alterado na subrotina (V16 - 12/09/2018)
+          MOV R1,-(R6)          ; salva R1 - vai ser alterado na subrotina (V16 - 12/09/2018)
+          MOV R2,-(R6)          ; salva R2 para usar na subrotina (V16 - 12/09/2018)
+          ADD #65500,R1         ; transforma indice do LED em endereco de E/S no visor
+__VOLTA_A_ESCREVER:
+          MOV -1(R0),R2         ; coloca 2 caracteres em R2, comecando em "endmensagem-1"
+          AND #255,R2           ; zera byte mais significativo da palavra lida
+          CMP R2,#0             ; testa se terminou mensagem (achou 1 byte com 0s binários)
+          BNE __ESCREVE_NO_LED  ; se nao terminou, vai exibir caractere lido
+          MOV (R6)+,R2          ; restaura valor original do R2 (V16 - 12/09/2018)
+          MOV (R6)+,R1          ; restaura valor original do R1 (V16 - 12/09/2018)
+          MOV (R6)+,R0          ; restaura valor original do R0 (V16 - 12/09/2018)
+          RTS R7                ; retorna ao ponto de chamada
+
+__ESCREVE_NO_LED:
+          MOV R2,(R1)           ; move para o visor
+          INC R0                ; aponta R0 para o proximo byte da mensagem
+          INC R1                ; aponta R1 para o proximo LED no visor
+          BEQ __FIM_VISOR       ; fim do visor - volta ao LED 00
+          BR __VOLTA_A_ESCREVER ; volta a escrever no visor
+__FIM_VISOR:
+          MOV #65500,R1         ; aponta para primeiro LED
+          BR __VOLTA_A_ESCREVER ; volta a escrever no visor
+
+
+
+F_GETCLOCK:
+	mov HORA, r0
+	mov MINUTO,r1
+	mov SEGUNDO,r2
+	rts r7
+
+
+F_SETCLOCK:
+	cmp r0,#24
+	bpl n_muda
+	cmp r1,#60
+	bpl n_muda
+	cmp r2, #60
+	bpl n_muda
+	mov r0,HORA
+	mov r1,MINUTO
+	mov r2,SEGUNDO
+	clr r0
+fim_setclock:
+	rts r7
+n_muda:
+	mov #1,r0
+	br fim_setclock	
+
+
+
+
+
+
+;
+;==============================================================================
+;	Rotinas de Tratamento das interrupcoes
+;==============================================================================
+; Constantes ("mascaras") para teste e alteracao dos bits de INTS na ISR
+;
+INTS_TIM:	equ	1     ; (0000000000000001) - testar bit 0
+nINTS_TIM:	equ	HFFFE ; (1111111111111110) - zerar bit 0
+INTS_TEC:	equ	2     ; (0000000000000010) - testar bit 1
+nINTS_TEC:	equ	HFFFD ; (1111111111111101) - zerar bit 1
+;
+; variáveis de comunicação com as funções do SISTEMA
+TECLA:		DW	0     ; código ASCII da tecla digitada (ou -1 se nenhuma)
+SEGUNDOS:	DW	0     ; segundos decorridos desde a inicialização (0 a 65535)
+HORA:           DW      0     ; hora do relógio (0 a 23)
+MINUTO:         DW      0     ; minuto da hora do relógio (0 a 59)
+SEGUNDO:        DW      0     ; segundo da hora do relógio (0 a 59)
+contador_ticks: dw 0
+;
+_ISR:
+	mov r0,-(r6)
+	mov r1, -(r6)
+	mov r2,-(r6)
+	mov r3,-(r6)
+	mov r4,-(r6)
+	mov r5,-(r6)
+
+	mov INTS,r0
+	and #INTS_TIM,r0
+	cmp r0,#INTS_TIM
+	beq int_timer
+	
+	mov INTS,r0
+	and #INTS_TEC,r0
+	cmp r0,#INTS_TEC
+	beq int_tec
+retorno:
+	and #nINTS_TIM, INTS
+	and #nINTS_TEC, INTS
+	mov (r6)+,r5
+	mov (r6)+,r4
+	mov (r6)+,r3
+	mov (r6)+,r2
+	mov (r6)+,r1
+	mov (r6)+,r0
+	rti 
+int_timer:
+	inc contador_ticks
+	cmp contador_ticks,#4
+	blt retorno
+	clr contador_ticks
+	inc SEGUNDOS
+	inc SEGUNDO
+	cmp SEGUNDO,#59
+	bgt add_minuto
+	br retorno
+add_minuto:
+	clr SEGUNDO
+	inc MINUTO
+	cmp MINUTO, #59
+	bgt add_hora
+	br retorno
+add_hora:
+	clr MINUTO
+	inc HORA
+	cmp #24,HORA
+	beq zera_hora
+	br retorno
+zera_hora:
+	clr HORA
+	br retorno
+
+int_tec:
+	mov TECDT,TECLA
+	clr TECST
+	br retorno
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+; FIM DO CÓDIGO DO SISTEMA
+;
+; >>>>>>>>> INSERIR AQUI AS SUB-ROTINAS DA BIBCESAR V16, SE FOR USAR <<<<<<<<<
+
+
+_S_LIMPA_VISOR_RAPIDA:
+          CLR 65500             ; limpa LED 00
+          CLR 65501             ; limpa LED 01
+          CLR 65502             ; limpa LED 02
+          CLR 65503             ; limpa LED 03
+          CLR 65504             ; limpa LED 04
+          CLR 65505             ; limpa LED 05
+          CLR 65506             ; limpa LED 06
+          CLR 65507             ; limpa LED 07
+          CLR 65508             ; limpa LED 08
+          CLR 65509             ; limpa LED 09
+          CLR 65510             ; limpa LED 10
+          CLR 65511             ; limpa LED 11
+          CLR 65512             ; limpa LED 12
+          CLR 65513             ; limpa LED 13
+          CLR 65514             ; limpa LED 14
+          CLR 65515             ; limpa LED 15
+          CLR 65516             ; limpa LED 16
+          CLR 65517             ; limpa LED 17
+          CLR 65518             ; limpa LED 18
+          CLR 65519             ; limpa LED 19
+          CLR 65520             ; limpa LED 20
+          CLR 65521             ; limpa LED 21
+          CLR 65522             ; limpa LED 22
+          CLR 65523             ; limpa LED 23
+          CLR 65524             ; limpa LED 24
+          CLR 65525             ; limpa LED 25
+          CLR 65526             ; limpa LED 26
+          CLR 65527             ; limpa LED 27
+          CLR 65528             ; limpa LED 28
+          CLR 65529             ; limpa LED 29
+          CLR 65530             ; limpa LED 30
+          CLR 65531             ; limpa LED 31
+          CLR 65532             ; limpa LED 32
+          CLR 65533             ; limpa LED 33
+          CLR 65534             ; limpa LED 34
+          CLR 65535             ; limpa LED 35
+          RTS R7                ; retorna ao ponto de chamada
+;
+;------------------------------------------------------------------------------
+;	Area reservada para os perifericos
+;------------------------------------------------------------------------------
+;
+; Acesso em 16 bits
+	org	_IOAREA16
+	daw	[31]
+IVET:	dw	0		; Vetor de interrupcao
+;
+; Acesso em 8 bits
+	org	_IOAREA08
+	dab	[23]
+TIMDT:	db	0		; Registro de programacao do timer
+INTS:	db	0		; INTERRUPT STATUS: IP x x x . x x IPStec IPStim
+INTE:	db	0		; INTERRUPT ENABLE: IE x x x . x x IEStec IEStim
+TECST:	db	0		; Status do teclado
+TECDT:	db	0		; Dado do teclado
+VISOR:	dab	[36]		; Portas de acesso ao visor
